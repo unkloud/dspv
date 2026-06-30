@@ -1,0 +1,15 @@
+[Desktop Entry]
+Name=DeepSeek Pricing
+Comment=DeepSeek Pricing Applet
+Type=Application
+Icon=com.system76.CosmicAppletDeepseek
+Exec=/home/ew/.local/bin/cosmic-applet-deepseek
+Terminal=false
+StartupNotify=true
+Categories=COSMIC;
+Keywords=COSMIC;Applet;Pricing;DeepSeek;
+NoDisplay=true
+X-CosmicApplet=true
+X-CosmicShrinkable=true
+X-HostWaylandDisplay=true
+X-CosmicHoverPopup=Auto

@@ -6,38 +6,151 @@ use cosmic::iced::platform_specific::shell::wayland::commands::popup::{destroy_p
 use cosmic::iced::{window::Id, Limits, Subscription};
 use cosmic::prelude::*;
 use cosmic::widget;
-use chrono::{DateTime, Utc, TimeZone, Timelike, Duration};
+use chrono::{DateTime, Utc, Timelike, Duration};
 use std::sync::LazyLock;
+use serde::{Deserialize, Serialize};
 
 static AUTOSIZE_MAIN_ID: LazyLock<cosmic::widget::Id> = LazyLock::new(|| cosmic::widget::Id::new("cosmic-applet-autosize-main"));
+const FALLBACK_RULES_JSON: &str = include_str!("../resources/pricing_rules.json");
 
-fn check_pricing_status(now: DateTime<Utc>) -> (bool, DateTime<Utc>, String) {
-    let policy_start = Utc.with_ymd_and_hms(2026, 7, 15, 0, 0, 0).unwrap();
+#[derive(Debug, Serialize, Deserialize, Clone)]
+struct Peak {
+    start_hour: u32,
+    end_hour: u32,
+    rate: f32,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+struct Promotion {
+    end_date: String,
+    off_peak_rate: f32,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+struct Vendor {
+    name: String,
+    icon: String,
+    timezone_offset_hours: i32,
+    activation_date: Option<String>,
+    default_rate: f32,
+    peaks: Vec<Peak>,
+    promotion: Option<Promotion>,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+struct RulesConfig {
+    vendors: Vec<Vendor>,
+}
+
+#[derive(Debug, Clone)]
+pub struct VendorState {
+    name: String,
+    icon: String,
+    is_peak: bool,
+    rate: f32,
+    countdown_str: String,
+    next_change_time: DateTime<Utc>,
+}
+
+fn load_rules() -> RulesConfig {
+    let home = std::env::var("HOME").unwrap_or_else(|_| "/home/ew".to_string());
+    let cache_dir = std::path::PathBuf::from(home).join(".config").join("tkmon");
+    let cache_file = cache_dir.join("pricing_rules.json");
+
+    let default_url = "https://raw.githubusercontent.com/user/tkmon/main/pricing_rules.json";
     
-    if now < policy_start {
-        // First peak starts at 1:00 AM UTC on July 15th
-        let first_peak = Utc.with_ymd_and_hms(2026, 7, 15, 1, 0, 0).unwrap();
-        return (false, first_peak, format_duration(first_peak - now));
-    }
-    
-    let hour = now.hour();
-    let is_peak = (1 <= hour && hour < 4) || (6 <= hour && hour < 10);
-    
-    let base_today = now.with_minute(0).unwrap().with_second(0).unwrap().with_nanosecond(0).unwrap();
-    let next_change = if 1 <= hour && hour < 4 {
-        base_today.with_hour(4).unwrap()
-    } else if 4 <= hour && hour < 6 {
-        base_today.with_hour(6).unwrap()
-    } else if 6 <= hour && hour < 10 {
-        base_today.with_hour(10).unwrap()
-    } else if hour < 1 {
-        base_today.with_hour(1).unwrap()
-    } else {
-        let tomorrow = base_today + Duration::days(1);
-        tomorrow.with_hour(1).unwrap()
+    // Attempt download with 2-second timeout
+    let downloaded_content = ureq::get(default_url)
+        .timeout(std::time::Duration::from_secs(2))
+        .call()
+        .map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e))
+        .and_then(|res| res.into_string());
+
+    let json_str = match downloaded_content {
+        Ok(content) => {
+            let _ = std::fs::create_dir_all(&cache_dir);
+            let _ = std::fs::write(&cache_file, &content);
+            content
+        }
+        Err(_) => {
+            std::fs::read_to_string(&cache_file).unwrap_or_else(|_| {
+                FALLBACK_RULES_JSON.to_string()
+            })
+        }
     };
+
+    serde_json::from_str(&json_str).unwrap_or_else(|_| {
+        serde_json::from_str(FALLBACK_RULES_JSON).expect("Fallback rules JSON must be valid")
+    })
+}
+
+fn check_vendor_pricing(vendor: &Vendor, now: DateTime<Utc>) -> (bool, f32, DateTime<Utc>, String) {
+    if let Some(ref act_str) = vendor.activation_date {
+        if let Ok(act_date) = DateTime::parse_from_rfc3339(act_str) {
+            let act_utc = act_date.with_timezone(&Utc);
+            if now < act_utc {
+                return (false, vendor.default_rate, act_utc, format_duration(act_utc - now));
+            }
+        }
+    }
+
+    let offset = Duration::hours(vendor.timezone_offset_hours as i64);
+    let now_local = now + offset;
+    let hour = now_local.hour();
+
+    let mut current_peak: Option<&Peak> = None;
+    for peak in &vendor.peaks {
+        if peak.start_hour <= hour && hour < peak.end_hour {
+            current_peak = Some(peak);
+            break;
+        }
+    }
+
+    let is_peak = current_peak.is_some();
+    let rate = if let Some(peak) = current_peak {
+        peak.rate
+    } else {
+        let mut off_peak_rate = vendor.default_rate;
+        if let Some(ref promo) = vendor.promotion {
+            if let Ok(promo_end) = DateTime::parse_from_rfc3339(&promo.end_date) {
+                if now < promo_end.with_timezone(&Utc) {
+                    off_peak_rate = promo.off_peak_rate;
+                }
+            }
+        }
+        off_peak_rate
+    };
+
+    let base_today_local = now_local.with_minute(0).unwrap().with_second(0).unwrap().with_nanosecond(0).unwrap();
     
-    (is_peak, next_change, format_duration(next_change - now))
+    let mut transition_hours = std::collections::BTreeSet::new();
+    for peak in &vendor.peaks {
+        transition_hours.insert(peak.start_hour);
+        transition_hours.insert(peak.end_hour);
+    }
+
+    if transition_hours.is_empty() {
+        let next_hour = now + Duration::hours(1);
+        return (false, rate, next_hour, format_duration(next_hour - now));
+    }
+
+    let mut next_change_utc = None;
+    for day_offset in 0..2 {
+        let base_day_local = base_today_local + Duration::days(day_offset);
+        for &h in &transition_hours {
+            if let Some(trans_local) = base_day_local.with_hour(h) {
+                let trans_utc = trans_local - offset;
+                if trans_utc > now {
+                    if next_change_utc.is_none() || trans_utc < next_change_utc.unwrap() {
+                        next_change_utc = Some(trans_utc);
+                    }
+                }
+            }
+        }
+    }
+
+    let next_change = next_change_utc.unwrap_or_else(|| now + Duration::hours(1));
+    (is_peak, rate, next_change, format_duration(next_change - now))
 }
 
 fn format_duration(duration: Duration) -> String {
@@ -57,49 +170,31 @@ fn format_duration(duration: Duration) -> String {
     parts.join(" ")
 }
 
-/// The application model stores app-specific state used to describe its interface and
-/// drive its logic.
 pub struct AppModel {
-    /// Application state which is managed by the COSMIC runtime.
     core: cosmic::Core,
-    /// The popup id.
     popup: Option<Id>,
-    /// Configuration data that persists between application runs.
     config: Config,
-    /// Is currently peak hours
-    is_peak: bool,
-    /// Formatted countdown string
-    countdown_str: String,
-    /// Time of the next switch
-    next_change_time: DateTime<Utc>,
-    /// Last update time
+    rules_config: RulesConfig,
+    vendor_states: Vec<VendorState>,
+    current_tab_index: usize,
     last_update: DateTime<Utc>,
-    /// Label displayed in the panel
     panel_label: String,
 }
 
-/// Messages emitted by the application and its widgets.
 #[derive(Debug, Clone)]
 pub enum Message {
     TogglePopup,
     PopupClosed(Id),
     UpdateConfig(Config),
     Tick,
+    SetTabIndex(usize),
 }
 
-/// Create a COSMIC application from the app model
 impl cosmic::Application for AppModel {
-    /// The async executor that will be used to run your application's commands.
     type Executor = cosmic::executor::Default;
-
-    /// Data that your application receives to its init method.
     type Flags = ();
-
-    /// Messages which the application and its widgets will emit.
     type Message = Message;
-
-    /// Unique identifier in RDNN (reverse domain name notation) format.
-    const APP_ID: &'static str = "com.system76.CosmicAppletDeepseek";
+    const APP_ID: &'static str = "com.system76.CosmicAppletTkmon";
 
     fn core(&self) -> &cosmic::Core {
         &self.core
@@ -109,12 +204,10 @@ impl cosmic::Application for AppModel {
         &mut self.core
     }
 
-    /// Initializes the application with any given flags and startup commands.
     fn init(
         core: cosmic::Core,
         _flags: Self::Flags,
     ) -> (Self, Task<cosmic::Action<Self::Message>>) {
-        // Construct the app model with the runtime's core.
         let config = cosmic_config::Config::new(Self::APP_ID, Config::VERSION)
             .map(|context| match Config::get_entry(&context) {
                 Ok(config) => config,
@@ -122,18 +215,34 @@ impl cosmic::Application for AppModel {
             })
             .unwrap_or_default();
 
+        let rules_config = load_rules();
         let now = Utc::now();
-        let (is_peak, next_change_time, countdown_str) = check_pricing_status(now);
-        let status_text = if is_peak { "📈 PEAK (2x)" } else { "📉 VALLEY (1x)" };
-        let panel_label = format!("{} • {}", status_text, countdown_str);
+        
+        let mut vendor_states = Vec::new();
+        for v in &rules_config.vendors {
+            let (is_peak, rate, next_change_time, countdown_str) = check_vendor_pricing(v, now);
+            vendor_states.push(VendorState {
+                name: v.name.clone(),
+                icon: v.icon.clone(),
+                is_peak,
+                rate,
+                countdown_str,
+                next_change_time,
+            });
+        }
+
+        let label_parts: Vec<String> = vendor_states.iter().map(|state| {
+            format!("{} {}x • {}", state.icon, state.rate, state.countdown_str)
+        }).collect();
+        let panel_label = label_parts.join(" | ");
 
         let app = AppModel {
             core,
             popup: None,
             config,
-            is_peak,
-            countdown_str,
-            next_change_time,
+            rules_config,
+            vendor_states,
+            current_tab_index: 0,
             last_update: now,
             panel_label,
         };
@@ -145,7 +254,6 @@ impl cosmic::Application for AppModel {
         Some(Message::PopupClosed(id))
     }
 
-    /// Describes the interface based on the current state of the application model.
     fn view(&self) -> Element<'_, Self::Message> {
         let horizontal = matches!(
             self.core.applet.anchor,
@@ -187,63 +295,82 @@ impl cosmic::Application for AppModel {
             .on_press_down(Message::TogglePopup)
             .class(cosmic::theme::Button::AppletIcon);
 
-        eprintln!("DEBUG DEEPSEEK VIEW: panel_label = {}, width = {:?}", self.panel_label, self.panel_label.len());
+        eprintln!("DEBUG TKMON VIEW: panel_label = {}, width = {:?}", self.panel_label, self.panel_label.len());
 
         cosmic::widget::autosize::autosize(button, AUTOSIZE_MAIN_ID.clone()).into()
     }
 
-    /// The applet's popup window will be drawn using this view method.
     fn view_window(&self, _id: Id) -> Element<'_, Self::Message> {
         let now_local = self.last_update.with_timezone(&chrono::Local);
-        let switch_local = self.next_change_time.with_timezone(&chrono::Local);
+        
+        let mut tab_row = widget::row!().spacing(4);
+        for (idx, state) in self.vendor_states.iter().enumerate() {
+            let btn = widget::button::text(&state.name)
+                .on_press(Message::SetTabIndex(idx))
+                .width(cosmic::iced::Length::Fill)
+                .class(if self.current_tab_index == idx {
+                    cosmic::theme::Button::Suggested
+                } else {
+                    cosmic::theme::Button::Text
+                });
+            tab_row = tab_row.push(btn);
+        }
 
-        let status_str = if self.is_peak { "📈 PEAK HOUR (2x price)" } else { "📉 VALLEY HOUR (1x price)" };
-        let switch_state = if self.is_peak { "VALLEY HOUR" } else { "PEAK HOUR" };
+        let mut tab_content = widget::list_column();
 
-        let content_list = widget::list_column()
-            .add(widget::settings::item(
-                "Pricing Status".to_string(),
-                widget::text(status_str).size(14),
-            ))
-            .add(widget::settings::item(
-                "Next Switch to".to_string(),
-                widget::text(switch_state).size(14),
-            ))
-            .add(widget::settings::item(
-                "Time Remaining".to_string(),
-                widget::text(&self.countdown_str).size(14),
-            ))
-            .add(widget::settings::item(
-                "Switch Time (Local)".to_string(),
-                widget::text(switch_local.format("%Y-%m-%d %H:%M:%S %Z").to_string()).size(12),
-            ))
-            .add(widget::settings::item(
-                "Switch Time (UTC)".to_string(),
-                widget::text(self.next_change_time.format("%Y-%m-%d %H:%M:%S UTC").to_string()).size(12),
-            ))
-            .add(widget::settings::item(
-                "Last Updated".to_string(),
-                widget::text(now_local.format("%H:%M:%S %Z").to_string()).size(12),
-            ));
+        if let Some(state) = self.vendor_states.get(self.current_tab_index) {
+            let switch_local = state.next_change_time.with_timezone(&chrono::Local);
+            let status_str = if state.is_peak {
+                format!("📈 PEAK HOUR ({:.1}x price)", state.rate)
+            } else {
+                format!("📉 VALLEY HOUR ({:.1}x price)", state.rate)
+            };
+            let next_state_str = if state.is_peak { "VALLEY HOUR" } else { "PEAK HOUR" };
 
-        self.core.applet.popup_container(content_list).into()
+            tab_content = tab_content
+                .add(widget::settings::item(
+                    "Status".to_string(),
+                    widget::text(status_str).size(14),
+                ))
+                .add(widget::settings::item(
+                    "Next Switch to".to_string(),
+                    widget::text(next_state_str).size(13),
+                ))
+                .add(widget::settings::item(
+                    "Time Remaining".to_string(),
+                    widget::text(&state.countdown_str).size(13),
+                ))
+                .add(widget::settings::item(
+                    "Switch Time (Local)".to_string(),
+                    widget::text(switch_local.format("%Y-%m-%d %H:%M:%S %Z").to_string()).size(12),
+                ));
+        }
+
+        tab_content = tab_content.add(widget::settings::item(
+            "Last Updated".to_string(),
+            widget::text(now_local.format("%H:%M:%S %Z").to_string()).size(12),
+        ));
+
+        let main_column = widget::column!(
+            tab_row,
+            widget::space::vertical().height(8),
+            tab_content
+        )
+        .padding(8);
+
+        self.core.applet.popup_container(main_column).into()
     }
 
-    /// Register subscriptions for this application.
     fn subscription(&self) -> Subscription<Self::Message> {
         Subscription::batch(vec![
-            // Tick every 10 seconds to update pricing status and countdown
             cosmic::iced::time::every(std::time::Duration::from_secs(10))
                 .map(|_| Message::Tick),
-            
-            // Watch for application configuration changes.
             self.core()
                 .watch_config::<Config>(Self::APP_ID)
                 .map(|update| Message::UpdateConfig(update.config)),
         ])
     }
 
-    /// Handles messages emitted by the application and its widgets.
     fn update(&mut self, message: Self::Message) -> Task<cosmic::Action<Self::Message>> {
         match message {
             Message::UpdateConfig(config) => {
@@ -251,13 +378,28 @@ impl cosmic::Application for AppModel {
             }
             Message::Tick => {
                 let now = Utc::now();
-                let (is_peak, next_change_time, countdown_str) = check_pricing_status(now);
-                self.is_peak = is_peak;
-                self.next_change_time = next_change_time;
-                self.countdown_str = countdown_str;
+                let mut vendor_states = Vec::new();
+                for v in &self.rules_config.vendors {
+                    let (is_peak, rate, next_change_time, countdown_str) = check_vendor_pricing(v, now);
+                    vendor_states.push(VendorState {
+                        name: v.name.clone(),
+                        icon: v.icon.clone(),
+                        is_peak,
+                        rate,
+                        countdown_str,
+                        next_change_time,
+                    });
+                }
+                self.vendor_states = vendor_states;
                 self.last_update = now;
-                let status_text = if is_peak { "📈 PEAK (2x)" } else { "📉 VALLEY (1x)" };
-                self.panel_label = format!("{} • {}", status_text, self.countdown_str);
+
+                let label_parts: Vec<String> = self.vendor_states.iter().map(|state| {
+                    format!("{} {:.1}x • {}", state.icon, state.rate, state.countdown_str)
+                }).collect();
+                self.panel_label = label_parts.join(" | ");
+            }
+            Message::SetTabIndex(idx) => {
+                self.current_tab_index = idx;
             }
             Message::TogglePopup => {
                 return if let Some(p) = self.popup.take() {

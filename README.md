@@ -1,12 +1,12 @@
-# DeepSeek Pricing COSMIC Panel Applet
+# AI Billing Peak Monitor
 
-A native Pop!_OS COSMIC Desktop panel applet written in Rust using the `libcosmic` widget toolkit. It monitors DeepSeek API pricing hours (Peak vs. Valley) and displays a real-time countdown to the next price change.
+A native Pop!_OS COSMIC Desktop panel applet written in Rust using the `libcosmic` widget toolkit. It monitors API pricing hours (Peak vs. Valley) for DeepSeek and z.ai GLM, displaying a real-time countdown to the next price change.
 
 ## Features
-- **Dynamic Status Indicator**: Displays the current pricing state (`📈 PEAK (2x)` or `📉 VALLEY (1x)`).
-- **Countdown Timer**: Shows remaining time formatted as `nD mH xMin` (e.g. `14D 14H 30Min`).
-- **Autosizing Width**: Bypasses default panel restrictions to automatically expand and fit the full length of the text.
-- **Interactive Info Popover**: Clicking the panel widget opens a native COSMIC popup showing detailed switch times (local & UTC) and the last update timestamp.
+- **Dynamic Status Indicator**: Displays pricing states with representative icons (`🐳` for DeepSeek, `⚡` for GLM) and rates.
+- **Autosizing Width**: Bypasses default panel restrictions to automatically expand and fit the full length of the status text.
+- **Tabbed Popover Info Dropdown**: Clicking the widget opens a native COSMIC popup showing individual tabs for each vendor with detailed status details, local switch times, and update timestamps.
+- **Data-Driven Rules**: Pricing configurations are dynamically downloaded, cached at `~/.config/tkmon/pricing_rules.json`, and parsed at startup (with local fallback).
 - **Theme-aware and Modern**: Automatically adapts to COSMIC light/dark modes and uses official system font styling.
 
 ---
@@ -16,7 +16,7 @@ A native Pop!_OS COSMIC Desktop panel applet written in Rust using the `libcosmi
 Before compiling, ensure you have the required desktop development libraries installed.
 
 ### 1. Rust Toolchain
-Install the Rust compiler and package manager (Rust 1.75+ or 2024 edition is recommended):
+Install the Rust compiler and package manager:
 ```bash
 curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
 ```
@@ -36,51 +36,52 @@ sudo apt install -y \
 
 ---
 
-## Building the Project
+## Building & Installing (Easy Way)
 
-Compile an optimized release-profile binary using Cargo:
+A management script is included to automatically compile, deploy, and reload the applet:
+
 ```bash
-cargo build --release
+# To install or update the applet:
+./manage_applet.sh install
+
+# To cleanly remove the applet:
+./manage_applet.sh uninstall
 ```
-The compiled binary will be generated at `target/release/cosmic-applet-deepseek`.
 
 ---
 
-## Local Installation & Deployment
+## Manual Installation & Deployment
 
-Since applets run in the user session, you can install and register it under your user home directory without needing superuser (`sudo`) privileges.
+If you prefer to perform the registration steps manually:
 
-### 1. Copy the Binary
-Create the local binary directory if it doesn't exist and copy the compiled output:
+### 1. Build the Binary
 ```bash
-mkdir -p ~/.local/bin
-cp target/release/cosmic-applet-deepseek ~/.local/bin/
+cargo build --release
 ```
 
-### 2. Install the Icon
-Copy the trend chart SVG icon to the user's scalable icons directory and update the icon cache:
+### 2. Copy the Binary
+```bash
+mkdir -p ~/.local/bin
+cp target/release/cosmic-applet-tkmon ~/.local/bin/
+```
+
+### 3. Install the Icon
 ```bash
 mkdir -p ~/.local/share/icons/hicolor/scalable/apps
-cp resources/icon.svg ~/.local/share/icons/hicolor/scalable/apps/com.system76.CosmicAppletDeepseek.svg
+cp resources/icon.svg ~/.local/share/icons/hicolor/scalable/apps/com.system76.CosmicAppletTkmon.svg
 gtk-update-icon-cache -f -t ~/.local/share/icons/hicolor
 ```
 
-### 3. Register the Applet Metadata
-Copy the `.desktop` file to both the system applications and COSMIC applet paths:
+### 4. Register the Applet Metadata
 ```bash
 mkdir -p ~/.local/share/applications ~/.local/share/cosmic/applets
-cp resources/app.desktop ~/.local/share/applications/com.system76.CosmicAppletDeepseek.desktop
-cp resources/app.desktop ~/.local/share/cosmic/applets/com.system76.CosmicAppletDeepseek.desktop
-chmod +x ~/.local/share/applications/com.system76.CosmicAppletDeepseek.desktop
+cp resources/app.desktop ~/.local/share/applications/com.system76.CosmicAppletTkmon.desktop
+cp resources/app.desktop ~/.local/share/cosmic/applets/com.system76.CosmicAppletTkmon.desktop
+chmod +x ~/.local/share/applications/com.system76.CosmicAppletTkmon.desktop
 ```
 
-### 4. Restart the COSMIC Panel
-Restart the COSMIC panel daemon to force it to scan the updated desktop files and load the applet:
+### 5. Restart the COSMIC Panel
 ```bash
-# Terminate any running instance of the applet
-pkill -f cosmic-applet-deepseek
-
-# Force restart the panel (cosmic-session will relaunch it immediately)
 kill -9 $(pgrep -f cosmic-panel | head -n 1)
 ```
 
@@ -90,5 +91,5 @@ kill -9 $(pgrep -f cosmic-panel | head -n 1)
 1. Open **COSMIC Settings** (Super key -> type "Settings").
 2. Go to **Desktop** -> **Panel**.
 3. Under the **Applets** section, click the **Add** button.
-4. Search for or select **DeepSeek Pricing**.
+4. Search for or select **AI Billing Peak Monitor**.
 5. Position it anywhere on your panel (e.g. Left wing, Center, or Right wing).

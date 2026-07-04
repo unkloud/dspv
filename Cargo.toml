@@ -1,16 +1,19 @@
 [package]
-name = "cosmic-applet-deepseek"
+name = "cosmic-applet-tkmon"
 version = "0.1.0"
 edition = "2024"
 license = "MIT"
-description = "DeepSeek Pricing Applet"
-repository = "https://github.com/user/deepseek-applet"
+description = "Track peak billing hours and price transitions for DeepSeek, GLM, and other AI APIs"
+repository = "https://github.com/user/tkmon"
 
 [dependencies]
 i18n-embed-fl = "0.10"
 rust-embed = "8.11"
 tokio = { version = "1.52.0", features = ["full"] }
 chrono = { version = "0.4", features = ["serde"] }
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+ureq = { version = "2.9", features = ["json"] }
 
 [dependencies.i18n-embed]
 version = "0.16"

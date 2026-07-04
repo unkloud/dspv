@@ -1,0 +1,28 @@
+{
+  "vendors": [
+    {
+      "name": "DeepSeek",
+      "icon": "🐳",
+      "timezone_offset_hours": 0,
+      "activation_date": "2026-07-15T00:00:00Z",
+      "default_rate": 1.0,
+      "peaks": [
+        {"start_hour": 1, "end_hour": 4, "rate": 2.0},
+        {"start_hour": 6, "end_hour": 10, "rate": 2.0}
+      ]
+    },
+    {
+      "name": "GLM",
+      "icon": "⚡",
+      "timezone_offset_hours": 8,
+      "default_rate": 2.0,
+      "peaks": [
+        {"start_hour": 14, "end_hour": 18, "rate": 3.0}
+      ],
+      "promotion": {
+        "end_date": "2026-09-30T16:00:00Z",
+        "off_peak_rate": 1.0
+      }
+    }
+  ]
+}

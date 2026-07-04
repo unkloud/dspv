@@ -1,5 +1,5 @@
-name := 'cosmic-applet-deepseek'
-appid := 'com.system76.CosmicAppletDeepseek'
+name := 'cosmic-applet-tkmon'
+appid := 'com.system76.CosmicAppletTkmon'
 rootdir := ''
 prefix := '/usr'
 

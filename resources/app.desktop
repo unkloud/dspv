@@ -1,13 +1,13 @@
 [Desktop Entry]
-Name=DeepSeek Pricing
-Comment=DeepSeek Pricing Applet
+Name=AI Billing Peak Monitor
+Comment=Track peak billing hours and price transitions for DeepSeek, GLM, and other AI APIs
 Type=Application
-Icon=com.system76.CosmicAppletDeepseek
-Exec=/home/ew/.local/bin/cosmic-applet-deepseek
+Icon=com.system76.CosmicAppletTkmon
+Exec=/home/ew/.local/bin/cosmic-applet-tkmon
 Terminal=false
 StartupNotify=true
 Categories=COSMIC;
-Keywords=COSMIC;Applet;Pricing;DeepSeek;
+Keywords=COSMIC;Applet;Pricing;DeepSeek;GLM;tkmon;
 NoDisplay=true
 X-CosmicApplet=true
 X-CosmicShrinkable=true

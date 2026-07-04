@@ -1,19 +1,19 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <component type="desktop-application">
-  <id>com.system76.CosmicAppletDeepseek</id>
+  <id>com.system76.CosmicAppletTkmon</id>
   <metadata_license>CC0-1.0</metadata_license>
   <project_license>MIT</project_license>
-  <name>DeepSeek Pricing</name>
-  <summary>DeepSeek Pricing Applet</summary>
+  <name>AI Billing Peak Monitor</name>
+  <summary>Track peak billing hours and price transitions for DeepSeek, GLM, and other AI APIs</summary>
   <icon type="remote" width="64" height="64" scale="1">
-    https://github.com/user/deepseek-applet/raw/main/resources/icons/hicolor/scalable/apps/icon.svg
+    https://github.com/user/tkmon/raw/main/resources/icons/hicolor/scalable/apps/icon.svg
   </icon>
-  <url type="vcs-browser">https://github.com/user/deepseek-applet</url>
-  <launchable type="desktop-id">com.system76.CosmicAppletDeepseek.desktop</launchable>
+  <url type="vcs-browser">https://github.com/user/tkmon</url>
+  <launchable type="desktop-id">com.system76.CosmicAppletTkmon.desktop</launchable>
   <provides>
     <id>com.system76.CosmicApplet</id>
     <binaries>
-      <binary>cosmic-applet-deepseek</binary>
+      <binary>cosmic-applet-tkmon</binary>
     </binaries>
   </provides>
   <requires>

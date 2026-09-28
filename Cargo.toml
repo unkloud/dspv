@@ -4,7 +4,7 @@ version = "0.1.0"
 edition = "2024"
 license = "MIT"
 description = "Track peak billing hours and price transitions for DeepSeek, GLM, and other AI APIs"
-repository = "https://github.com/user/tkmon"
+repository = "https://github.com/unkloud/dspv"
 
 [dependencies]
 i18n-embed-fl = "0.10"

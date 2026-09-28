@@ -1,4 +1,5 @@
 {
+  "//": "Peak/off-peak billing windows for dspv/tkmon. Times are local to each vendor's timezone_offset_hours. `days_of_week` uses ISO weekday numbers (1=Mon .. 7=Sun); omit it to mean every day. `exceptions` are local calendar ranges billed as off-peak all day: `[\"YYYY-MM-DD\"]` for one day, `[\"START\", \"END\"]` for a start-inclusive/end-exclusive range.",
   "vendors": [
     {
       "name": "DeepSeek",
@@ -6,23 +7,38 @@
       "timezone_offset_hours": 0,
       "activation_date": "2026-07-15T00:00:00Z",
       "default_rate": 1.0,
+      "days_of_week": [1, 2, 3, 4, 5],
       "peaks": [
         {"start_hour": 1, "end_hour": 4, "rate": 2.0},
         {"start_hour": 6, "end_hour": 10, "rate": 2.0}
-      ]
+      ],
+      "//peaks": "Peak hours are 01:00-04:00 and 06:00-10:00 UTC, Monday through Friday, excluding Chinese public holidays. All other hours are off-peak, including weekends and Chinese public holidays in full. Off-peak rates are half of peak. Source: https://api-docs.deepseek.com/quick_start/pricing",
+      "exceptions": [
+        ["2026-10-01", "2026-10-08"]
+      ],
+      "//exceptions": "Chinese public holidays, which DeepSeek bills as off-peak in full. 2026 dates from the State Council notice (国办发明电〔2025〕7号): New Year Jan 1-3, Spring Festival Feb 15-23, Qingming Apr 4-6, Labour Day May 1-5, Dragon Boat Jun 19-21, Mid-Autumn Sep 25-27, National Day Oct 1-7. Ranges are start-inclusive/end-exclusive. Only holidays from today onward are listed so this file stays readable; add earlier 2026 blocks if you are back-testing. Source: https://www.gov.cn/zhengce/zhengceku/202511/content_7047091.htm",
+      "//exceptions-note": "Statutory makeup workdays (Sep 20, Oct 10) are deliberately NOT treated as peak weekdays: they are ordinary weekends under the published rule, and pricing them as peak would overstate cost."
     },
     {
       "name": "GLM",
       "icon": "⚡",
       "timezone_offset_hours": 8,
       "default_rate": 2.0,
+      "days_of_week": [1, 2, 3, 4, 5],
       "peaks": [
         {"start_hour": 14, "end_hour": 18, "rate": 3.0}
       ],
+      "//peaks": "Peak hours are Monday to Friday, 14:00-18:00 Singapore Standard Time (UTC+8). GLM-5.3 consumes plan quota at 1x off-peak and 3x peak. Sources: https://docs.z.ai/devpack/notice/usage-revision.md and https://docs.z.ai/devpack/teamplan.md",
+      "exceptions": [
+        ["2026-09-25", "2026-10-08"]
+      ],
+      "//exceptions": "From September 25 to October 7, 2026 (both inclusive), all-day usage is charged at the off-peak rate. Sep 25-27 is the Mid-Autumn statutory block; the rest is z.ai's announced grace period. Source: https://docs.z.ai/devpack/notice/usage-revision.md",
+      "//rate-note": "default_rate 2.0 is GLM-5.3's standing off-peak multiplier (peak 3.0 / 2), matching the documented 1x-vs-3x pair against a 2x base. The 1.0 figure advertised through September 2026 was a limited-time benefit, which is why it lives in `promotion` and expires rather than sitting in default_rate.",
       "promotion": {
-        "end_date": "2026-09-30T16:00:00Z",
+        "end_date": "2026-10-07T16:00:00Z",
         "off_peak_rate": 1.0
-      }
+      },
+      "//promotion": "1x off-peak quota while the limited-time benefit runs. end_date 2026-10-07T16:00:00Z == 2026-10-08T00:00:00+08:00, i.e. the instant the all-day off-peak window above closes, so the two cannot disagree."
     }
   ]
 }

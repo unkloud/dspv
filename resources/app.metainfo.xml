@@ -6,9 +6,9 @@
   <name>AI Billing Peak Monitor</name>
   <summary>Track peak billing hours and price transitions for DeepSeek, GLM, and other AI APIs</summary>
   <icon type="remote" width="64" height="64" scale="1">
-    https://github.com/user/tkmon/raw/main/resources/icons/hicolor/scalable/apps/icon.svg
+    https://raw.githubusercontent.com/unkloud/dspv/main/resources/icon.svg
   </icon>
-  <url type="vcs-browser">https://github.com/user/tkmon</url>
+  <url type="vcs-browser">https://github.com/unkloud/dspv</url>
   <launchable type="desktop-id">com.system76.CosmicAppletTkmon.desktop</launchable>
   <provides>
     <id>com.system76.CosmicApplet</id>
